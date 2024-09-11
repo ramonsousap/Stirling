@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# Verifica se o script está sendo executado como root
+if [ "$EUID" -ne 0 ]; then
+  echo "Por favor, execute como root."
+  exit
+fi
+
+# Atualiza pacotes
+apt update && apt upgrade -y
+
+# Instala Docker se necessário
+if ! [ -x "$(command -v docker)" ]; then
+  echo "Instalando Docker..."
+  apt install -y docker.io
+fi
+
+# Instala Docker Compose se necessário
+if ! [ -x "$(command -v docker-compose)" ]; then
+  echo "Instalando Docker Compose..."
+  apt install -y docker-compose
+fi
+
+# Pergunta o nome de domínio para o Traefik
+read -p "Digite o nome de domínio para acessar o StirlingPDF (ex: pdf.seudominio.com): " domain_name
+
+# Criar diretório para StirlingPDF
+mkdir -p /opt/stirlingpdf
+
+# Criar arquivo docker-compose.yml para StirlingPDF com Traefik
+cat <<EOL > /opt/stirlingpdf/docker-compose.yml
+version: "3"
+
+services:
+  stirlingpdf:
+    image: stirlingpdf/stirlingpdf
+    container_name: stirlingpdf
+    ports:
+      - "8080:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stirlingpdf.rule=Host(\`${domain_name}\`)"
+      - "traefik.http.services.stirlingpdf.loadbalancer.server.port=8080"
+      - "traefik.http.routers.stirlingpdf.entrypoints=websecure"
+      - "traefik.http.routers.stirlingpdf.tls=true"
+      - "traefik.http.routers.stirlingpdf.tls.certresolver=myresolver"
+    restart: unless-stopped
+EOL
+
+# Inicia o contêiner com Docker Compose
+cd /opt/stirlingpdf
+docker-compose up -d
+
+echo "StirlingPDF instalado e rodando no domínio $domain_name"
