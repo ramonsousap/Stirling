@@ -24,19 +24,21 @@ fi
 # Pergunta o nome de domínio para o Traefik
 read -p "Digite o nome de domínio para acessar o StirlingPDF (ex: pdf.seudominio.com): " domain_name
 
-# Criar diretório para StirlingPDF
+# Cria o diretório para StirlingPDF
 mkdir -p /opt/stirlingpdf
 
-# Criar arquivo docker-compose.yml para StirlingPDF com Traefik
+# Cria o arquivo docker-compose.yml para StirlingPDF com Traefik
 cat <<EOL > /opt/stirlingpdf/docker-compose.yml
-version: "3"
+version: "3.8"
 
 services:
   stirlingpdf:
-    image: stirlingpdf/stirlingpdf
+    image: frooodle/s-pdf
     container_name: stirlingpdf
     ports:
       - "8080:8080"
+    deploy:
+      replicas: 1
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.stirlingpdf.rule=Host(\`${domain_name}\`)"
@@ -47,8 +49,13 @@ services:
     restart: unless-stopped
 EOL
 
-# Inicia o contêiner com Docker Compose
-cd /opt/stirlingpdf
-docker-compose up -d
+# Inicializa o Docker Swarm se ainda não estiver em execução
+if ! docker info | grep -q "Swarm: active"; then
+  echo "Inicializando o Docker Swarm..."
+  docker swarm init
+fi
+
+# Cria a stack no Docker Swarm
+docker stack deploy -c /opt/stirlingpdf/docker-compose.yml stirlingpdf
 
 echo "StirlingPDF instalado e rodando no domínio $domain_name"
